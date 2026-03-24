@@ -1,42 +1,72 @@
-# kasada-security-research
+# 🛡️ Kasada Security Research
 
-**Technical analysis of Kasada's client-side bot protection architecture**
+<p align="center">
+  <b>Technical analysis of Kasada's client-side bot protection architecture</b>
+</p>
 
-> ⚠️ **Educational Research Only**: This repository contains security research for educational purposes. Bypassing bot protection systems may violate terms of service and applicable laws.
+<p align="center">
+  <img src="https://img.shields.io/badge/Research-Security-blue" />
+  <img src="https://img.shields.io/badge/Focus-Bot%20Protection-orange" />
+  <img src="https://img.shields.io/badge/Status-Educational%20Only-red" />
+  <img src="https://img.shields.io/badge/License-Research-lightgrey" />
+</p>
 
-## Quick Summary
+---
 
-This research explores Kasada's architecture, challenge-response mechanisms, and cryptographic token binding. Key findings:
+> ⚠️ **Educational Research Only**
+> This repository contains security research for educational purposes.
+> Bypassing bot protection systems may violate terms of service and applicable laws.
 
-- CD tokens generated for one endpoint work universally across all endpoints
-- Challenge solving happens entirely client-side in obfuscated p.js
-- Server validates via HMAC-SHA256 cryptographic binding
-- Browser context (fingerprinting) is essential for token generation
-- Token headers must be non-null or validation fails
+---
 
-## Full Analysis
+## 📌 Quick Summary
 
-## Full Analysis
+This research explores **Kasada's architecture**, **challenge-response mechanisms**, and **cryptographic token binding**.
 
-### 1. Kasada Architecture Overview
+### 🔍 Key Findings
 
-#### System Components
+* ✅ CD tokens generated for one endpoint work across all endpoints
+* 🧠 Challenge solving occurs entirely client-side in obfuscated `p.js`
+* 🔐 Server validation uses **HMAC-SHA256 cryptographic binding**
+* 🌐 Browser context (fingerprinting) is required for token generation
+* ❗ Token headers must be non-null or validation fails
+
+---
+
+## 🧠 Full Analysis
+
+---
+
+### 1. 🏗️ Architecture Overview
+
+#### 🔧 System Components
+
 Kasada deploys three core components:
-- **p.js**: Obfuscated client-side SDK (VM bytecode + string encryption)
-- **/tl endpoint**: Challenge metadata endpoint (returns empty body)
-- **Server-side validator**: HMAC verification + token tracking
 
-#### Challenge-Response Flow
-Unlike traditional server-challenge models, Kasada:
-1. Sends p.js (obfuscated) to client
-2. Client generates internal challenges via VM bytecode
-3. Client solves PoW locally
-4. Client submits proof via headers (x-kpsdk-cd, x-kpsdk-ct, x-kpsdk-h)
-5. Server validates cryptographic signatures
+* **`p.js`** → Obfuscated client-side SDK (VM bytecode + string encryption)
+* **`/tl` endpoint** → Challenge metadata endpoint *(returns empty body)*
+* **Server-side validator** → HMAC verification + token tracking
 
-### 2. Kasada's Proof-of-Work System
+#### 🔄 Challenge-Response Flow
 
-#### Challenge Data (CD) Structure
+Unlike traditional server-driven challenges:
+
+1. Client receives `p.js`
+2. Internal challenges generated via VM bytecode
+3. Proof-of-Work solved locally
+4. Proof submitted via headers:
+
+   * `x-kpsdk-cd`
+   * `x-kpsdk-ct`
+   * `x-kpsdk-h`
+5. Server validates cryptographic integrity
+
+---
+
+### 2. ⚙️ Proof-of-Work System
+
+#### 📦 Challenge Data (CD) Structure
+
 ```json
 {
   "workTime": 1774345743062,
@@ -48,163 +78,243 @@ Unlike traditional server-challenge models, Kasada:
   "rst": 1774339360605
 }
 ```
-Where:
 
-• answers[]: Solutions to cryptographic puzzles
-• duration: Time spent solving (prevents pre-computation)
-• d: Difficulty parameter
-• workTime/st/rst: Timestamp triplet for server-side validation
+#### 🧾 Field Breakdown
 
-PoW Validation
+* `answers[]` → Puzzle solutions
+* `duration` → Solve time (anti pre-compute)
+* `d` → Difficulty parameter
+* `workTime / st / rst` → Timestamp validation triplet
 
-Server verifies:
+#### ✅ Server Validation Logic
 
-1. Timestamp freshness: now() - CD.st < 5 seconds
-2. Uniqueness: CD.id not in consumed token set
-3. Cryptographic signature: HMAC-SHA256(secret, CT || CD) == x-kpsdk-h
-4. Solution correctness: Answers match puzzle set
+1. **Timestamp freshness**
+   `now() - CD.st < 5 seconds`
 
-3. Kasada's Token Binding Strategy
+2. **Uniqueness**
+   `CD.id` must not be reused
 
-Client Token (CT) - Expensive
+3. **Signature validation**
 
-• Cost: High (fingerprinting + crypto ops)
-• Lifetime: ~30 minutes
-• Contains: TLS fingerprint, User-Agent signature, device signals
-• Reusable: YES (across multiple requests)
+   ```
+   HMAC-SHA256(secret, CT || CD) == x-kpsdk-h
+   ```
 
-Challenge Data (CD) - Cheap
-
-• Cost: Low (PoW computation)
-• Lifetime: <5 seconds
-• Contains: PoW answers + metadata
-• Reusable: NO (single-use, tracked server-side)
-
-HMAC Binding
-```x-kpsdk-h = HMAC-SHA256(server_secret, CT || CD)```
-
-This cryptographic binding prevents:
-• CT forgery without secret
-• CD modification after signing
-• CT/CD mixing between sessions
-
-4. p.js Obfuscation Techniques
-Kasada employs multiple layers:
-
-Layer 1: VM Bytecode
-• Challenge-solving algorithm compiled to custom VM instructions
-• Prevents direct code analysis
-• Requires VM instruction set reverse-engineering
-
-Layer 2: String Encryption
-• All hardcoded strings encrypted
-• Decrypted at runtime
-• Prevents static string matching
-
-Layer 3: Control Flow Flattening
-• Linear code converted to non-linear execution
-• Goto-based jumps
-• Makes algorithm flow unclear
-
-Layer 4: Dead Code Injection
-• Non-executing code paths interspersed
-• Misleads automated analysis tools
-• Increases reverse-engineering time
-
-5. Key Research Findings
-Finding 1: Endpoint Universality
-# CD tokens generated for endpoint A successfully validate on endpoint B
-Implication: Server validates cryptographic binding, not endpoint-specific state
-```
-POST /api/v1/endpoint-a with CD → x-kpsdk-h verified ✓
-POST /api/v2/endpoint-b with same CD → x-kpsdk-h still valid ✓
-```
-
-Finding 2: Empty /tl Response
-/tl endpoint returns empty body (0 bytes) with challenge headers
-
-This confirms: Challenge solving happens entirely client-side in p.js
-• Server sends no puzzle parameters
-• No challenge data in response
-• All computation local to client
-
-Finding 3: Browser Context Dependency
-CD generation requires authenticated browser session
-Fresh/isolated profiles fail Kasada checks despite valid auth tokens:
-• Lacks browsing history
-• Missing TLS fingerprint signals
-• No device reputation data
-• Kasada's CT fingerprinting detects this
-
-Finding 4: Header Validation Strictness
-Empty/null Kasada headers cause 403 rejection
-Server validates header presence and consistency:
-• x-kpsdk-h: HMAC signature (required)
-• x-kpsdk-v: SDK version (required)
-• x-kpsdk-cd: Challenge data (required)
-• x-kpsdk-ct: Client token (required)
-• Sending null values triggers WAF rejection
-
-6. Cryptographic Assessment
-Security Model
-Kasada's model relies on three pillars:
-1. Cryptographic Binding (HMAC-SHA256)
-• Resistant to forgery without server secret
-  • Prevents token tampering
-2. Computational Cost (PoW)
-  • Real-time solving required
-  • Pre-computed answers fail timestamp validation
-3. Temporal Constraints (5-second TTL)
-  • Prevents capture-and-replay attacks
-  • Forces synchronization with server time
-
-Attack Surface Analysis
-Strengths:
-• HMAC prevents token forgery
-• Timestamp validation prevents replay
-• Unique ID tracking prevents reuse
-• PoW adds computational barrier
-
-Weaknesses:
-• Client-side generation leaks algorithm to client
-• No endpoint pinning (CD migrates between endpoints)
-• Narrow timestamp window (exploitable in sync scenario)
-• Browser fingerprinting can be spoofed with proper TLS context
-
-7. Implications for Web Security
-Kasada represents a shift in bot protection philosophy:
-• Traditional: Server generates unpredictable challenges
-• Kasada: Client generates deterministic challenges (with client-side obfuscation)
-
-This model assumes:
-• Obfuscation is sufficient defense against reverse-engineering
-• Client-side PoW is computationally expensive for bots
-• Cryptographic binding is unbreakable
-
-However, the architecture inherently enables sophisticated attackers to:
-1. Monitor the challenge-solving process
-2. Identify PoW answer patterns
-3. Intercept CD tokens before transmission
-4. Replay tokens across endpoints
-
-Conclusion
-Kasada is a sophisticated bot protection system that shifts computational burden to clients while maintaining cryptographic validation server-side. However, the reliance on client-side obfuscation and the leakage of PoW mechanisms to the client create an asymmetry where determined attackers can observe, analyze, and intercept the challenge-solving process.
-
-The system's security ultimately depends on the strength of its obfuscation rather than cryptographic principles, making it vulnerable to advanced reverse-engineering techniques.
-
-## Research Disclaimer
-
-This work is intended for:
-- Security researchers
-- Bot protection system designers
-- Academic study of cryptographic systems
-- Understanding modern authentication challenges
-
-**Not for**:
-- Bypassing security systems for malicious purposes
-- Violating website terms of service
-- Unauthorized access to protected resources
+4. **Solution correctness**
+   Answers must match expected puzzle output
 
 ---
 
-*If you found this research valuable, consider citing it or contributing improvements.*
+### 3. 🔐 Token Binding Strategy
+
+#### 💠 Client Token (CT) — *Expensive*
+
+* High computational cost
+* Lifetime: ~30 minutes
+* Includes:
+
+  * TLS fingerprint
+  * User-Agent signature
+  * Device signals
+* ♻️ Reusable across requests
+
+#### 💠 Challenge Data (CD) — *Cheap*
+
+* Low computational cost
+* Lifetime: < 5 seconds
+* Contains PoW answers + metadata
+* 🚫 Single-use only
+
+#### 🔑 HMAC Binding
+
+```
+x-kpsdk-h = HMAC-SHA256(server_secret, CT || CD)
+```
+
+#### 🔒 Security Guarantees
+
+* Prevents CT forgery
+* Prevents CD tampering
+* Prevents cross-session token mixing
+
+---
+
+### 4. 🧩 p.js Obfuscation Techniques
+
+Kasada uses layered obfuscation:
+
+#### 🧱 Layer 1: VM Bytecode
+
+* Custom virtual machine instructions
+* Prevents direct code inspection
+
+#### 🔑 Layer 2: String Encryption
+
+* Runtime decryption of all strings
+* Blocks static analysis
+
+#### 🔀 Layer 3: Control Flow Flattening
+
+* Non-linear execution (goto-style)
+* Obscures logical flow
+
+#### 🧪 Layer 4: Dead Code Injection
+
+* Non-executing paths
+* Misleads analysis tools
+
+---
+
+### 5. 🔎 Key Research Findings
+
+#### 🧭 Endpoint Universality
+
+CD tokens are **not endpoint-bound**:
+
+```http
+POST /api/v1/endpoint-a → ✅ Valid
+POST /api/v2/endpoint-b → ✅ Still valid
+```
+
+**Implication:** Validation depends on cryptographic binding, not endpoint context.
+
+---
+
+#### 📭 Empty `/tl` Response
+
+* Returns **0-byte body**
+* Only headers included
+
+**Conclusion:**
+
+* No server-side challenge data
+* All computation happens client-side
+
+---
+
+#### 🌐 Browser Context Dependency
+
+Token generation requires a real browser environment:
+
+* Browsing history
+* TLS fingerprint
+* Device reputation
+
+🚫 Fresh profiles fail validation even with valid auth
+
+---
+
+#### 🚫 Header Validation Strictness
+
+Missing or null headers → **403 Forbidden**
+
+Required headers:
+
+* `x-kpsdk-h` → HMAC signature
+* `x-kpsdk-v` → SDK version
+* `x-kpsdk-cd` → Challenge data
+* `x-kpsdk-ct` → Client token
+
+---
+
+### 6. 🧮 Cryptographic Assessment
+
+#### 🛡️ Security Model
+
+Kasada relies on:
+
+1. **Cryptographic Binding**
+
+   * HMAC-SHA256 integrity protection
+
+2. **Computational Cost**
+
+   * Real-time PoW requirement
+
+3. **Temporal Constraints**
+
+   * ~5 second TTL prevents replay
+
+---
+
+#### ⚖️ Attack Surface Analysis
+
+**✅ Strengths**
+
+* HMAC prevents forgery
+* Timestamp limits replay
+* Unique IDs prevent reuse
+* PoW adds computational barrier
+
+**⚠️ Weaknesses**
+
+* Client-side logic exposure
+* No endpoint binding
+* Tight timing window
+* Fingerprinting can be spoofed
+
+---
+
+### 7. 🌍 Implications for Web Security
+
+#### 🔄 Paradigm Shift
+
+| Traditional                  | Kasada                      |
+| ---------------------------- | --------------------------- |
+| Server-generated challenges  | Client-generated challenges |
+| Opaque logic                 | Obfuscated logic            |
+| Server-controlled difficulty | Client-executed PoW         |
+
+---
+
+#### ⚠️ Architectural Tradeoffs
+
+This model assumes:
+
+* Obfuscation resists reverse engineering
+* PoW slows automation
+* Cryptographic binding is sufficient
+
+However, attackers can:
+
+1. Observe challenge execution
+2. Extract PoW patterns
+3. Intercept CD tokens
+4. Replay across endpoints
+
+---
+
+## 🧾 Conclusion
+
+Kasada represents a **modern, client-heavy bot protection system** that shifts computational burden to users while maintaining server-side cryptographic validation.
+
+However:
+
+* Client-side execution exposes logic
+* Obfuscation becomes the primary defense layer
+* Advanced attackers can observe and replay behavior
+
+👉 The system’s security depends more on **obfuscation strength** than purely on cryptographic guarantees.
+
+---
+
+## ⚖️ Research Disclaimer
+
+### ✅ Intended For
+
+* Security researchers
+* Bot protection designers
+* Academic study
+* Authentication system analysis
+
+### ❌ Not Intended For
+
+* Bypassing protections maliciously
+* Violating terms of service
+* Unauthorized system access
+
+---
+
+<p align="center">
+  ⭐ If you found this research useful, consider contributing or citing it.
+</p>
